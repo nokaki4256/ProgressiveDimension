@@ -3,7 +3,7 @@
 ProgressiveDimension.py
 
 Progressive Dimension for FreeCAD TechDraw
-Version: 0.0.68
+Version: 0.0.69
 """
 
 import math
@@ -14,7 +14,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import TechDraw
 
-VERSION = "0.0.68"
+VERSION = "0.0.69"
 
 DEBUG = True
 
@@ -2667,3 +2667,62 @@ class SelectionGeometryBridge(SelectionGeometryBridge):
         )
 
         return ConstraintBuilder().build(descriptors, dim_mode)
+
+
+# ============================================================
+# v0.0.69
+# Layout Solver Foundation
+# ============================================================
+
+from dataclasses import dataclass
+
+@dataclass
+class CandidateLayout:
+    layouts: list
+    score: float = 0.0
+
+
+class ConstraintEvaluator:
+
+    def evaluate(self, candidate, constraints):
+        score = 100.0
+
+        for c in constraints:
+            if c.constraint_type == ConstraintType.CLEARANCE:
+                score -= max(0.0, 10.0 - c.value)
+            elif c.constraint_type == ConstraintType.BOUNDARY:
+                score -= max(0.0, 8.0 - c.value) * 0.5
+
+        candidate.score = max(score, 0.0)
+        return candidate.score
+
+
+class LayoutSolver:
+
+    def __init__(self):
+        self.evaluator = ConstraintEvaluator()
+
+    def solve(self, layouts, constraints):
+        candidate = CandidateLayout(list(layouts))
+        self.evaluator.evaluate(candidate, constraints)
+        return candidate.layouts
+
+
+class IntegratedLayoutManager(IntegratedLayoutManager):
+
+    def process(self, geometry_items, mode):
+        layouts = super().process(geometry_items, mode)
+
+        bridge = SelectionGeometryBridge()
+        constraints = []
+        try:
+            constraints = bridge.build_constraints(
+                ProgressiveDimensionEngine().selection,
+                ProgressiveDimensionEngine().view,
+                mode
+            )
+        except Exception:
+            pass
+
+        layouts = LayoutSolver().solve(layouts, constraints)
+        return layouts
