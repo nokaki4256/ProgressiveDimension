@@ -3,7 +3,7 @@
 ProgressiveDimension.py
 
 Progressive Dimension for FreeCAD TechDraw
-Version: 0.0.67
+Version: 0.0.68
 """
 
 import math
@@ -14,7 +14,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import TechDraw
 
-VERSION = "0.0.67"
+VERSION = "0.0.68"
 
 DEBUG = True
 
@@ -2601,3 +2601,69 @@ class SelectionGeometryBridge(SelectionGeometryBridge):
             descriptors.append(geo)
 
         return descriptors
+
+
+# ============================================================
+# v0.0.68
+# Constraint Foundation
+# ============================================================
+
+from dataclasses import dataclass
+from enum import Enum, auto
+
+class ConstraintType(Enum):
+    ALIGN = auto()
+    CLEARANCE = auto()
+    LEADER = auto()
+    BOUNDARY = auto()
+
+@dataclass
+class LayoutConstraint:
+    constraint_type: ConstraintType
+    target: str
+    value: float
+    priority: int = 100
+
+class ConstraintBuilder:
+
+    TEXT_CLEARANCE = 8.0
+    MODEL_CLEARANCE = 5.0
+
+    def build(self, descriptors, mode):
+        constraints = []
+
+        for desc in descriptors:
+            constraints.append(
+                LayoutConstraint(
+                    ConstraintType.CLEARANCE,
+                    desc.name,
+                    self.TEXT_CLEARANCE,
+                    100,
+                )
+            )
+
+            if getattr(desc, "bounding_box", None) is not None:
+                constraints.append(
+                    LayoutConstraint(
+                        ConstraintType.BOUNDARY,
+                        desc.name,
+                        self.MODEL_CLEARANCE,
+                        80,
+                    )
+                )
+
+        return constraints
+
+
+class SelectionGeometryBridge(SelectionGeometryBridge):
+
+    def build_constraints(self, selection_engine, view,
+                          dim_mode=DimensionMode.HORIZONTAL):
+
+        descriptors = self.collect_descriptors(
+            selection_engine,
+            view,
+            dim_mode,
+        )
+
+        return ConstraintBuilder().build(descriptors, dim_mode)
