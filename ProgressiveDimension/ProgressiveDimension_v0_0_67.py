@@ -3,7 +3,7 @@
 ProgressiveDimension.py
 
 Progressive Dimension for FreeCAD TechDraw
-Version: 0.0.66
+Version: 0.0.67
 """
 
 import math
@@ -14,7 +14,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import TechDraw
 
-VERSION = "0.0.66"
+VERSION = "0.0.67"
 
 DEBUG = True
 
@@ -2540,3 +2540,64 @@ class GeometryFactory(GeometryFactory):
                 desc.curve_type = CurveType.LINE
 
         return desc
+
+
+# ============================================================
+# v0.0.67
+# Selection Descriptor Foundation
+# ============================================================
+
+from dataclasses import dataclass
+
+@dataclass
+class SelectionDescriptor:
+    object_name: str = ""
+    sub_element: str = ""
+    source_object: object = None
+    view: object = None
+
+
+class SelectionResolver:
+
+    def __init__(self, selection_engine):
+        self.selection_engine = selection_engine
+
+    def collect(self):
+        descriptors = []
+
+        for item in self.selection_engine.collect_selection():
+            obj = getattr(item, "Object", None)
+            for sub in getattr(item, "SubElementNames", []):
+                descriptors.append(
+                    SelectionDescriptor(
+                        object_name=getattr(obj, "Name", ""),
+                        sub_element=sub,
+                        source_object=obj,
+                        view=self.selection_engine.view,
+                    )
+                )
+
+        return descriptors
+
+
+class SelectionGeometryBridge(SelectionGeometryBridge):
+
+    def collect_descriptors(self, selection_engine, view,
+                            dim_mode=DimensionMode.HORIZONTAL):
+
+        resolver = GeometryResolver(view)
+        factory = GeometryFactory(resolver)
+        cache = GeometryCache()
+
+        descriptors = []
+
+        for sel in SelectionResolver(selection_engine).collect():
+            geo = cache.get(sel.sub_element)
+            if geo is None:
+                geo = factory.create(sel.sub_element, dim_mode)
+                geo.source_object = sel.source_object
+                geo.sub_element = sel.sub_element
+                cache.put(sel.sub_element, geo)
+            descriptors.append(geo)
+
+        return descriptors
