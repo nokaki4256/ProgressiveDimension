@@ -1,10 +1,9 @@
-
 # -*- coding: utf-8 -*-
 """
 ProgressiveDimension.py
 
 Progressive Dimension for FreeCAD TechDraw
-Version: 0.0.65
+Version: 0.0.66
 """
 
 import math
@@ -15,7 +14,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import TechDraw
 
-VERSION = "0.0.65"
+VERSION = "0.0.66"
 
 DEBUG = True
 
@@ -2472,3 +2471,72 @@ class SelectionGeometryBridge(SelectionGeometryBridge):
 
         self._geometry_cache = geometry
         return geometry
+
+
+# ============================================================
+# v0.0.66
+# Geometry Descriptor Expansion
+# ============================================================
+
+@dataclass
+class BoundingBox2D:
+    xmin: float = 0.0
+    xmax: float = 0.0
+    ymin: float = 0.0
+    ymax: float = 0.0
+
+
+class CurveType(Enum):
+    UNKNOWN = auto()
+    LINE = auto()
+    ARC = auto()
+    CIRCLE = auto()
+
+
+@dataclass
+class GeometryDescriptor(GeometryDescriptor):
+    curve_type: CurveType = CurveType.UNKNOWN
+    bounding_box: object = None
+    source_object: object = None
+    sub_element: str = ""
+    diameter: Optional[float] = None
+    is_closed: bool = False
+
+
+class GeometryFactory(GeometryFactory):
+
+    def create(self, subname, dim_mode):
+        desc = super().create(subname, dim_mode)
+        desc.sub_element = subname
+        desc.source_object = getattr(self.resolver, "view", None)
+
+        edge = None
+        try:
+            edge = self.resolver.resolve_edge(subname)
+        except Exception:
+            edge = None
+
+        if edge:
+            pts = [v.Point for v in getattr(edge, "Vertexes", [])]
+            if pts:
+                desc.bounding_box = BoundingBox2D(
+                    xmin=min(p.x for p in pts),
+                    xmax=max(p.x for p in pts),
+                    ymin=min(p.y for p in pts),
+                    ymax=max(p.y for p in pts),
+                )
+
+            curve = getattr(edge, "Curve", None)
+            cname = type(curve).__name__ if curve else ""
+            if "Circle" in cname:
+                desc.curve_type = CurveType.CIRCLE
+                r = getattr(curve, "Radius", None)
+                desc.radius = r
+                desc.diameter = None if r is None else r * 2.0
+                desc.is_closed = True
+            elif "Arc" in cname:
+                desc.curve_type = CurveType.ARC
+            elif "Line" in cname:
+                desc.curve_type = CurveType.LINE
+
+        return desc
