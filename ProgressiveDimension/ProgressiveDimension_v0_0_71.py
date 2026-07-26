@@ -3,7 +3,7 @@
 ProgressiveDimension.py
 
 Progressive Dimension for FreeCAD TechDraw
-Version: 0.0.70
+Version: 0.0.71
 """
 
 import math
@@ -14,7 +14,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import TechDraw
 
-VERSION = "0.0.70"
+VERSION = "0.0.71"
 
 DEBUG = True
 
@@ -2790,3 +2790,76 @@ class LayoutSolver(LayoutSolver):
                 best_layouts = candidate.layouts
 
         return best_layouts
+
+
+# ============================================================
+# v0.0.71
+# Advanced Layout Scoring
+# ============================================================
+
+from dataclasses import dataclass
+
+@dataclass
+class LayoutScore:
+    quality: float = 0.0
+    constraint: float = 0.0
+    collisions: int = 0
+    leader_crossings: int = 0
+    boundary_penalty: float = 0.0
+
+    @property
+    def total(self):
+        return (
+            self.quality
+            + self.constraint
+            - self.collisions * 10.0
+            - self.leader_crossings * 20.0
+            - self.boundary_penalty
+        )
+
+
+class ConstraintEvaluator(ConstraintEvaluator):
+
+    def evaluate(self, candidate, constraints):
+        score = 100.0
+        boundary = 0.0
+
+        for c in constraints:
+            if c.constraint_type == ConstraintType.CLEARANCE:
+                score -= max(0.0, 8.0 - c.value)
+            elif c.constraint_type == ConstraintType.BOUNDARY:
+                boundary += max(0.0, 5.0 - c.value)
+
+        candidate.score = max(score - boundary, 0.0)
+        return candidate.score
+
+
+class CandidateGenerator(CandidateGenerator):
+
+    SIDE_OFFSETS = (
+        ("Top", 10.0),
+        ("Bottom", -10.0),
+        ("Left", -10.0),
+        ("Right", 10.0),
+    )
+
+    def generate(self, layouts, mode):
+        candidates = super().generate(layouts, mode)
+
+        for side, delta in self.SIDE_OFFSETS:
+            trial = []
+            for item in layouts:
+                clone = LayoutItem(
+                    text_x=item.text_x,
+                    text_y=item.text_y,
+                    bend_point=item.bend_point,
+                    visible=item.visible,
+                )
+                if mode == DimensionMode.HORIZONTAL:
+                    clone.text_y += delta
+                else:
+                    clone.text_x += delta
+                trial.append(clone)
+            candidates.append(CandidateLayout(trial))
+
+        return candidates
