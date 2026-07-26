@@ -3,7 +3,7 @@
 ProgressiveDimension.py
 
 Progressive Dimension for FreeCAD TechDraw
-Version: 0.0.79
+Version: 0.0.80
 """
 
 import math
@@ -14,7 +14,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import TechDraw
 
-VERSION = "0.0.79"
+VERSION = "0.0.80"
 
 DEBUG = True
 
@@ -3246,6 +3246,78 @@ class LayoutSolver(LayoutSolver):
                 geometry_items,
                 best,
                 mode
+            )
+        except Exception:
+            pass
+
+        return best
+
+
+class IntegratedLayoutManager(IntegratedLayoutManager):
+
+    def process(self, geometry_items, mode):
+        layouts = super().process(geometry_items, mode)
+
+        constraints = []
+        try:
+            engine = ProgressiveDimensionEngine()
+            engine.initialize()
+            bridge = SelectionGeometryBridge()
+            constraints = bridge.build_constraints(
+                engine.selection,
+                engine.view,
+                mode
+            )
+        except Exception:
+            pass
+
+        return LayoutSolver().solve_best(
+            geometry_items,
+            layouts,
+            constraints,
+            mode
+        )
+
+
+# ============================================================
+# v0.0.80
+# Candidate Stability Pass
+# ============================================================
+
+class LayoutSolver(LayoutSolver):
+
+    def solve_best(self, geometry_items, layouts, constraints, mode):
+        result = self.solve_with_result(layouts, constraints, mode)
+
+        if result.selected is None:
+            return layouts
+
+        best = result.selected.layouts
+
+        try:
+            best = LocalCollisionRecovery().optimize(best, mode)
+        except Exception:
+            pass
+
+        try:
+            best = LeaderAutoRouter().optimize(
+                geometry_items,
+                best,
+                mode
+            )
+        except Exception:
+            pass
+
+        try:
+            quality = LayoutQualityEvaluator().score(best, mode)
+            crossings = LeaderSegmentEvaluator().crossing_count(
+                geometry_items,
+                best
+            )
+            collisions = TextBoundingBoxEvaluator().collision_count(best)
+            log(
+                f"Final layout: quality={quality:.1f}, "
+                f"collisions={collisions}, crossings={crossings}"
             )
         except Exception:
             pass
