@@ -3,7 +3,7 @@
 ProgressiveDimension.py
 
 Progressive Dimension for FreeCAD TechDraw
-Version: 0.0.69
+Version: 0.0.70
 """
 
 import math
@@ -14,7 +14,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import TechDraw
 
-VERSION = "0.0.69"
+VERSION = "0.0.70"
 
 DEBUG = True
 
@@ -2726,3 +2726,67 @@ class IntegratedLayoutManager(IntegratedLayoutManager):
 
         layouts = LayoutSolver().solve(layouts, constraints)
         return layouts
+
+
+# ============================================================
+# v0.0.70
+# Candidate Generator Foundation
+# ============================================================
+
+from dataclasses import dataclass
+
+@dataclass
+class LayoutScore:
+    quality: float = 0.0
+    constraint: float = 0.0
+
+    @property
+    def total(self):
+        return self.quality + self.constraint
+
+
+class CandidateGenerator:
+
+    OFFSETS = (-10.0, -5.0, 0.0, 5.0, 10.0)
+
+    def generate(self, layouts, mode):
+        candidates = []
+        for delta in self.OFFSETS:
+            trial = []
+            for item in layouts:
+                clone = LayoutItem(
+                    text_x=item.text_x,
+                    text_y=item.text_y,
+                    bend_point=item.bend_point,
+                    visible=item.visible
+                )
+                if mode == DimensionMode.HORIZONTAL:
+                    clone.text_y += delta
+                else:
+                    clone.text_x += delta
+                trial.append(clone)
+            candidates.append(CandidateLayout(trial))
+        return candidates
+
+
+class LayoutSolver(LayoutSolver):
+
+    def solve(self, layouts, constraints, mode=None):
+        if mode is None:
+            return super().solve(layouts, constraints)
+
+        generator = CandidateGenerator()
+        quality = LayoutQualityEvaluator()
+
+        best_layouts = layouts
+        best_total = float("-inf")
+
+        for candidate in generator.generate(layouts, mode):
+            q = quality.score(candidate.layouts, mode)
+            c = self.evaluator.evaluate(candidate, constraints)
+            total = LayoutScore(q, c).total
+            if total > best_total:
+                best_total = total
+                best_layouts = candidate.layouts
+
+        return best_layouts
