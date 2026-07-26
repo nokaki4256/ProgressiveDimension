@@ -3,7 +3,7 @@
 ProgressiveDimension.py
 
 Progressive Dimension for FreeCAD TechDraw
-Version: 0.0.81
+Version: 0.0.82
 """
 
 import math
@@ -14,7 +14,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import TechDraw
 
-VERSION = "0.0.81"
+VERSION = "0.0.82"
 
 DEBUG = True
 
@@ -1447,7 +1447,12 @@ class SelectionPointResolver(SelectionPointResolver):
 # Arc Detection / Orientation
 # ============================================================
 
-class GeometryType(GeometryType):
+class GeometryType(Enum):
+    UNKNOWN = auto()
+    VERTEX = auto()
+    EDGE = auto()
+    CIRCLE = auto()
+    LINE = auto()
     ARC = auto()
 
 
@@ -3420,3 +3425,51 @@ class IntegratedLayoutManager(IntegratedLayoutManager):
             constraints,
             mode
         )
+
+
+# ============================================================
+# v0.0.82
+# Enum Compatibility Fix + Solver Diagnostics
+# ============================================================
+
+class SolverDiagnostics:
+
+    def validate(self, result):
+        if result is None:
+            return False
+        if getattr(result, "selected", None) is None:
+            log("Solver produced no selected candidate.", LogLevel.WARNING)
+            return False
+        return True
+
+
+class IntegratedLayoutManager(IntegratedLayoutManager):
+
+    def process(self, geometry_items, mode):
+        layouts = super().process(geometry_items, mode)
+
+        try:
+            engine = ProgressiveDimensionEngine()
+            engine.initialize()
+
+            bridge = SelectionGeometryBridge()
+            constraints = bridge.build_constraints(
+                engine.selection,
+                engine.view,
+                mode,
+            )
+
+            solver = LayoutSolver()
+            result = solver.solve_with_result(
+                layouts,
+                constraints,
+                mode,
+            )
+
+            if SolverDiagnostics().validate(result):
+                return result.selected.layouts
+
+        except Exception as exc:
+            log(f"Solver fallback: {exc}", LogLevel.WARNING)
+
+        return layouts
