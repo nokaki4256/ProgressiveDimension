@@ -3,7 +3,7 @@
 ProgressiveDimension.py
 
 Progressive Dimension for FreeCAD TechDraw
-Version: 0.0.77
+Version: 0.0.78
 """
 
 import math
@@ -14,7 +14,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import TechDraw
 
-VERSION = "0.0.77"
+VERSION = "0.0.78"
 
 DEBUG = True
 
@@ -3163,3 +3163,59 @@ class IntegratedLayoutManager(IntegratedLayoutManager):
             log(f"Solver fallback: {exc}", LogLevel.WARNING)
 
         return solver.solve(layouts, constraints, mode)
+
+
+# ============================================================
+# v0.0.78
+# Candidate Evaluation Integration
+# ============================================================
+
+class LayoutSolver(LayoutSolver):
+
+    def solve_best(self, geometry_items, layouts, constraints, mode):
+        """Select the best layout candidate using the current scoring model."""
+        ranked = self.solve_with_ranking(layouts, constraints, mode)
+
+        if not ranked:
+            return layouts
+
+        best = ranked[0]
+
+        try:
+            score = getattr(best, "total_score", 0.0)
+            log(f"Selected candidate score: {score:.2f}")
+        except Exception:
+            pass
+
+        return best.layouts
+
+
+class IntegratedLayoutManager(IntegratedLayoutManager):
+
+    def process(self, geometry_items, mode):
+        layouts = super().process(geometry_items, mode)
+
+        constraints = []
+        try:
+            engine = ProgressiveDimensionEngine()
+            engine.initialize()
+            bridge = SelectionGeometryBridge()
+            constraints = bridge.build_constraints(
+                engine.selection,
+                engine.view,
+                mode,
+            )
+        except Exception as exc:
+            log(f"Constraint fallback: {exc}", LogLevel.WARNING)
+
+        try:
+            layouts = LayoutSolver().solve_best(
+                geometry_items,
+                layouts,
+                constraints,
+                mode,
+            )
+        except Exception as exc:
+            log(f"Candidate evaluation skipped: {exc}", LogLevel.WARNING)
+
+        return layouts
