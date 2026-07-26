@@ -3,7 +3,7 @@
 ProgressiveDimension.py
 
 Progressive Dimension for FreeCAD TechDraw
-Version: 0.0.74
+Version: 0.0.75
 """
 
 import math
@@ -14,7 +14,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import TechDraw
 
-VERSION = "0.0.74"
+VERSION = "0.0.75"
 
 DEBUG = True
 
@@ -3033,3 +3033,58 @@ class SolverResult(SolverResult):
         if self.selected is None:
             return None
         return getattr(self.selected, "score", None)
+
+
+# ============================================================
+# v0.0.75
+# Refactoring Foundation
+# ============================================================
+
+from dataclasses import dataclass
+
+@dataclass
+class SolverContext:
+    geometry: list
+    constraints: list
+    mode: object
+    result: object = None
+
+
+class SolverPipeline:
+
+    def __init__(self):
+        self._solver = LayoutSolver()
+
+    def execute(self, geometry, constraints, mode):
+        context = SolverContext(
+            geometry=geometry,
+            constraints=constraints,
+            mode=mode,
+        )
+        context.result = self._solver.solve_with_result(
+            geometry,
+            constraints,
+            mode,
+        )
+        return context
+
+
+class IntegratedLayoutManager(IntegratedLayoutManager):
+
+    def run_solver_pipeline(self, geometry, constraints, mode):
+        """Unified entry point for future solver-based layout."""
+        pipeline = SolverPipeline()
+        return pipeline.execute(
+            geometry,
+            constraints,
+            mode,
+        )
+
+
+def build_solver_context(geometry, constraints, mode):
+    """Factory helper used by future modules."""
+    return SolverContext(
+        geometry=geometry,
+        constraints=constraints,
+        mode=mode,
+    )
