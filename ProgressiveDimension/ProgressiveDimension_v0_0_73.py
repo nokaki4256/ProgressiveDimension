@@ -3,7 +3,7 @@
 ProgressiveDimension.py
 
 Progressive Dimension for FreeCAD TechDraw
-Version: 0.0.72
+Version: 0.0.73
 """
 
 import math
@@ -14,7 +14,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import TechDraw
 
-VERSION = "0.0.72"
+VERSION = "0.0.73"
 
 DEBUG = True
 
@@ -2922,3 +2922,64 @@ class LayoutSolver(LayoutSolver):
             log(f"Best candidate #{ranked[0].candidate_id} score={ranked[0].total_score:.2f}")
 
         return ranked
+
+
+# ============================================================
+# v0.0.73
+# Solver Result Tracking
+# ============================================================
+
+from dataclasses import dataclass, field
+
+@dataclass
+class RejectedCandidate:
+    candidate_id: int
+    score: float
+    reasons: list = field(default_factory=list)
+
+
+@dataclass
+class SolverResult:
+    selected: object = None
+    ranked: list = field(default_factory=list)
+    rejected: list = field(default_factory=list)
+
+
+class LayoutSolver(LayoutSolver):
+
+    def solve_with_result(self, layouts, constraints, mode):
+        ranked = self.solve_with_ranking(layouts, constraints, mode)
+
+        result = SolverResult()
+
+        if ranked:
+            result.selected = ranked[0]
+            result.ranked = ranked
+
+            for item in ranked[1:]:
+                result.rejected.append(
+                    RejectedCandidate(
+                        candidate_id=item.candidate_id,
+                        score=item.total_score,
+                        reasons=[
+                            "Lower total score than selected candidate"
+                        ]
+                    )
+                )
+
+        return result
+
+
+class IntegratedLayoutManager(IntegratedLayoutManager):
+
+    def solve_layout(self, layouts, constraints, mode):
+        solver = LayoutSolver()
+        result = solver.solve_with_result(layouts, constraints, mode)
+
+        if result.selected is not None:
+            log(
+                f"Selected candidate #{result.selected.candidate_id} "
+                f"score={result.selected.total_score:.2f}"
+            )
+
+        return result
