@@ -3,7 +3,7 @@
 ProgressiveDimension.py
 
 Progressive Dimension for FreeCAD TechDraw
-Version: 0.0.84
+Version: 0.0.85
 """
 
 import math
@@ -14,7 +14,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import TechDraw
 
-VERSION = "0.0.84"
+VERSION = "0.0.85"
 
 DEBUG = True
 
@@ -1073,12 +1073,15 @@ class ProgressiveDimensionTaskPanel(ProgressiveDimensionTaskPanel):
     def getStandardButtons(self):
         if QtGui is None:
             return 0
-
-        return (
-            int(QtGui.QDialogButtonBox.Ok) |
-            int(QtGui.QDialogButtonBox.Cancel) |
-            int(QtGui.QDialogButtonBox.Apply)
-        )
+        try:
+            SB = QtGui.QDialogButtonBox.StandardButton
+            return SB.Ok | SB.Cancel | SB.Apply
+        except AttributeError:
+            return (
+                QtGui.QDialogButtonBox.Ok |
+                QtGui.QDialogButtonBox.Cancel |
+                QtGui.QDialogButtonBox.Apply
+            )
 
     def open(self):
         try:
