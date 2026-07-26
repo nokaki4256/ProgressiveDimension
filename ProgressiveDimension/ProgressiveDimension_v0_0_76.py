@@ -3,7 +3,7 @@
 ProgressiveDimension.py
 
 Progressive Dimension for FreeCAD TechDraw
-Version: 0.0.75
+Version: 0.0.76
 """
 
 import math
@@ -14,7 +14,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import TechDraw
 
-VERSION = "0.0.75"
+VERSION = "0.0.76"
 
 DEBUG = True
 
@@ -3088,3 +3088,39 @@ def build_solver_context(geometry, constraints, mode):
         constraints=constraints,
         mode=mode,
     )
+
+# ============================================================
+# v0.0.76
+# Solver Pipeline Integration
+# ============================================================
+
+class IntegratedLayoutManager(IntegratedLayoutManager):
+
+    def process(self, geometry_items, mode):
+        layouts = super().process(geometry_items, mode)
+
+        bridge = SelectionGeometryBridge()
+        constraints = []
+
+        try:
+            engine = ProgressiveDimensionEngine()
+            engine.initialize()
+            constraints = bridge.build_constraints(
+                engine.selection,
+                engine.view,
+                mode,
+            )
+        except Exception as exc:
+            log(f"Constraint build skipped: {exc}", LogLevel.WARNING)
+
+        pipeline = SolverPipeline()
+        result = pipeline.execute(
+            layouts,
+            constraints,
+            mode,
+        )
+
+        if getattr(result, "result", None) and result.result.selected:
+            return result.result.selected.layouts
+
+        return layouts
