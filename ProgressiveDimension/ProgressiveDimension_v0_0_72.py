@@ -3,7 +3,7 @@
 ProgressiveDimension.py
 
 Progressive Dimension for FreeCAD TechDraw
-Version: 0.0.71
+Version: 0.0.72
 """
 
 import math
@@ -14,7 +14,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import TechDraw
 
-VERSION = "0.0.71"
+VERSION = "0.0.72"
 
 DEBUG = True
 
@@ -2863,3 +2863,62 @@ class CandidateGenerator(CandidateGenerator):
             candidates.append(CandidateLayout(trial))
 
         return candidates
+
+
+# ============================================================
+# v0.0.72
+# Candidate Ranking
+# ============================================================
+
+from dataclasses import dataclass, field
+
+@dataclass(order=True)
+class RankedCandidate:
+    total_score: float
+    candidate_id: int = field(compare=False)
+    layouts: list = field(compare=False, default_factory=list)
+    score: object = field(compare=False, default=None)
+    reason: str = field(compare=False, default="")
+
+
+class CandidateRanking:
+
+    def rank(self, ranked_candidates):
+        return sorted(
+            ranked_candidates,
+            key=lambda c: c.total_score,
+            reverse=True
+        )
+
+
+class LayoutSolver(LayoutSolver):
+
+    def solve_with_ranking(self, layouts, constraints, mode):
+        generator = CandidateGenerator()
+        quality = LayoutQualityEvaluator()
+
+        ranked = []
+
+        for idx, candidate in enumerate(generator.generate(layouts, mode)):
+            q = quality.score(candidate.layouts, mode)
+            c = self.evaluator.evaluate(candidate, constraints)
+            score = LayoutScore(
+                quality=q,
+                constraint=c
+            )
+            ranked.append(
+                RankedCandidate(
+                    total_score=score.total,
+                    candidate_id=idx,
+                    layouts=candidate.layouts,
+                    score=score,
+                    reason="Highest total score"
+                )
+            )
+
+        ranked = CandidateRanking().rank(ranked)
+
+        if ranked:
+            log(f"Best candidate #{ranked[0].candidate_id} score={ranked[0].total_score:.2f}")
+
+        return ranked
