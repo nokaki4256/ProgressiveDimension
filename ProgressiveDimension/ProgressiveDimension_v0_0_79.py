@@ -3,7 +3,7 @@
 ProgressiveDimension.py
 
 Progressive Dimension for FreeCAD TechDraw
-Version: 0.0.78
+Version: 0.0.79
 """
 
 import math
@@ -14,7 +14,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import TechDraw
 
-VERSION = "0.0.78"
+VERSION = "0.0.79"
 
 DEBUG = True
 
@@ -3219,3 +3219,61 @@ class IntegratedLayoutManager(IntegratedLayoutManager):
             log(f"Candidate evaluation skipped: {exc}", LogLevel.WARNING)
 
         return layouts
+
+
+# ============================================================
+# v0.0.79
+# Candidate Selection Refinement
+# ============================================================
+
+class LayoutSolver(LayoutSolver):
+
+    def solve_best(self, geometry_items, layouts, constraints, mode):
+        result = self.solve_with_result(layouts, constraints, mode)
+
+        if result.selected is None:
+            return layouts
+
+        best = result.selected.layouts
+
+        try:
+            best = LocalCollisionRecovery().optimize(best, mode)
+        except Exception:
+            pass
+
+        try:
+            best = LeaderAutoRouter().optimize(
+                geometry_items,
+                best,
+                mode
+            )
+        except Exception:
+            pass
+
+        return best
+
+
+class IntegratedLayoutManager(IntegratedLayoutManager):
+
+    def process(self, geometry_items, mode):
+        layouts = super().process(geometry_items, mode)
+
+        constraints = []
+        try:
+            engine = ProgressiveDimensionEngine()
+            engine.initialize()
+            bridge = SelectionGeometryBridge()
+            constraints = bridge.build_constraints(
+                engine.selection,
+                engine.view,
+                mode
+            )
+        except Exception:
+            pass
+
+        return LayoutSolver().solve_best(
+            geometry_items,
+            layouts,
+            constraints,
+            mode
+        )
