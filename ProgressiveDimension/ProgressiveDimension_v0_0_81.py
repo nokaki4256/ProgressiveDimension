@@ -3,7 +3,7 @@
 ProgressiveDimension.py
 
 Progressive Dimension for FreeCAD TechDraw
-Version: 0.0.80
+Version: 0.0.81
 """
 
 import math
@@ -14,7 +14,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import TechDraw
 
-VERSION = "0.0.80"
+VERSION = "0.0.81"
 
 DEBUG = True
 
@@ -3344,6 +3344,77 @@ class IntegratedLayoutManager(IntegratedLayoutManager):
             pass
 
         return LayoutSolver().solve_best(
+            geometry_items,
+            layouts,
+            constraints,
+            mode
+        )
+
+
+# ============================================================
+# v0.0.81
+# Solver Stability Metrics
+# ============================================================
+
+class SolverStatistics:
+
+    def __init__(self):
+        self.candidates = 0
+        self.selected_score = 0.0
+        self.collisions = 0
+        self.crossings = 0
+
+    def report(self):
+        log(
+            f"SolverStats: candidates={self.candidates}, "
+            f"score={self.selected_score:.2f}, "
+            f"collisions={self.collisions}, "
+            f"crossings={self.crossings}"
+        )
+
+
+class LayoutSolver(LayoutSolver):
+
+    def solve_with_statistics(self, geometry_items, layouts, constraints, mode):
+        result = self.solve_with_result(layouts, constraints, mode)
+
+        stats = SolverStatistics()
+        stats.candidates = len(getattr(result, "ranked", []))
+
+        if result.selected is not None:
+            stats.selected_score = getattr(result.selected, "total_score", 0.0)
+            stats.collisions = TextBoundingBoxEvaluator().collision_count(
+                result.selected.layouts
+            )
+            stats.crossings = LeaderSegmentEvaluator().crossing_count(
+                geometry_items,
+                result.selected.layouts
+            )
+            stats.report()
+            return result.selected.layouts
+
+        return layouts
+
+
+class IntegratedLayoutManager(IntegratedLayoutManager):
+
+    def process(self, geometry_items, mode):
+        layouts = super().process(geometry_items, mode)
+
+        constraints = []
+        try:
+            engine = ProgressiveDimensionEngine()
+            engine.initialize()
+            bridge = SelectionGeometryBridge()
+            constraints = bridge.build_constraints(
+                engine.selection,
+                engine.view,
+                mode
+            )
+        except Exception:
+            pass
+
+        return LayoutSolver().solve_with_statistics(
             geometry_items,
             layouts,
             constraints,
