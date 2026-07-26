@@ -3,7 +3,7 @@
 ProgressiveDimension.py
 
 Progressive Dimension for FreeCAD TechDraw
-Version: 0.0.82
+Version: 0.0.83
 """
 
 import math
@@ -14,7 +14,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import TechDraw
 
-VERSION = "0.0.82"
+VERSION = "0.0.83"
 
 DEBUG = True
 
@@ -3473,3 +3473,27 @@ class IntegratedLayoutManager(IntegratedLayoutManager):
             log(f"Solver fallback: {exc}", LogLevel.WARNING)
 
         return layouts
+
+
+# ============================================================
+# v0.0.83
+# Safe GeometryType alias and solver validation
+# ============================================================
+
+class GeometryTypeHelper:
+
+    @staticmethod
+    def is_linear(gtype):
+        return gtype in (GeometryType.LINE, GeometryType.EDGE)
+
+    @staticmethod
+    def is_circular(gtype):
+        return gtype in (GeometryType.CIRCLE, GeometryType.ARC)
+
+
+class LayoutSolver(LayoutSolver):
+
+    def validate_result(self, result):
+        if result is None:
+            return False
+        return getattr(result, "selected", None) is not None
