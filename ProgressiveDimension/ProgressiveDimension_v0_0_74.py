@@ -3,7 +3,7 @@
 ProgressiveDimension.py
 
 Progressive Dimension for FreeCAD TechDraw
-Version: 0.0.73
+Version: 0.0.74
 """
 
 import math
@@ -14,7 +14,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import TechDraw
 
-VERSION = "0.0.73"
+VERSION = "0.0.74"
 
 DEBUG = True
 
@@ -2983,3 +2983,53 @@ class IntegratedLayoutManager(IntegratedLayoutManager):
             )
 
         return result
+
+
+# ============================================================
+# v0.0.74
+# Detailed Score Aggregation
+# ============================================================
+
+from dataclasses import dataclass, field
+
+@dataclass
+class ScoreBreakdown:
+    quality: float = 0.0
+    constraint: float = 0.0
+    collision_penalty: float = 0.0
+    boundary_penalty: float = 0.0
+    leader_penalty: float = 0.0
+    notes: list = field(default_factory=list)
+
+    @property
+    def total(self):
+        return (
+            self.quality
+            + self.constraint
+            - self.collision_penalty
+            - self.boundary_penalty
+            - self.leader_penalty
+        )
+
+
+class LayoutSolver(LayoutSolver):
+
+    def evaluate_candidate(self, candidate, constraints, mode):
+        quality = LayoutQualityEvaluator().score(candidate.layouts, mode)
+        constraint = self.evaluator.evaluate(candidate, constraints)
+
+        breakdown = ScoreBreakdown(
+            quality=quality,
+            constraint=constraint
+        )
+
+        candidate.score = breakdown
+        return breakdown
+
+
+class SolverResult(SolverResult):
+
+    def best_score(self):
+        if self.selected is None:
+            return None
+        return getattr(self.selected, "score", None)
