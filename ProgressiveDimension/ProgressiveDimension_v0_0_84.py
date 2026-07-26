@@ -3,7 +3,7 @@
 ProgressiveDimension.py
 
 Progressive Dimension for FreeCAD TechDraw
-Version: 0.0.83
+Version: 0.0.84
 """
 
 import math
@@ -14,7 +14,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import TechDraw
 
-VERSION = "0.0.83"
+VERSION = "0.0.84"
 
 DEBUG = True
 
@@ -3497,3 +3497,36 @@ class LayoutSolver(LayoutSolver):
         if result is None:
             return False
         return getattr(result, "selected", None) is not None
+
+
+# ============================================================
+# v0.0.84
+# Macro Entry Point + Execution Trace
+# ============================================================
+
+def run_progressive_dimension():
+    log("[STEP01] Macro started")
+
+    settings = UserSelectionSettings()
+    panel = ProgressiveDimensionTaskPanel(settings)
+
+    try:
+        panel.initialize_ui()
+        log("[STEP02] TaskPanel initialized")
+    except Exception as exc:
+        log(f"[STEP02] TaskPanel initialization failed: {exc}", LogLevel.ERROR)
+        raise
+
+    try:
+        panel.open()
+        log("[STEP03] TaskPanel opened")
+    except Exception as exc:
+        log(f"[STEP03] TaskPanel open failed: {exc}", LogLevel.ERROR)
+        raise
+
+
+if __name__ == "__main__":
+    try:
+        run_progressive_dimension()
+    except Exception as exc:
+        log(f"[FATAL] {exc}", LogLevel.ERROR)
